@@ -1,21 +1,31 @@
-const express = require('express')
-const cors = require('cors')
-require('dotenv').config()
+const express = require('express');
+const cors = require('cors');
+require('dotenv').config();
 
-const app = express()
-PORT = process.env.PORT
-const conn = require('./conn')
-app.use(express.json())
-app.use(cors())
+const app = express();
 
-const tripRoutes = require('./routes/trip.routes')
+// Ensure the PORT is properly defined
+const PORT = process.env.PORT || 3000;
 
-app.use('/trip', tripRoutes) // http://localhost:3001/trip --> POST/GET/GET by ID
+// Database connection
+const conn = require('./conn'); // Ensure this connects without blocking the server
 
-app.get('/hello', (req,res)=>{
-    res.send('Hello World!')
-})
+// Middleware
+app.use(express.json()); // To parse incoming JSON requests
+app.use(cors()); // Enable CORS
 
-app.listen(PORT, ()=>{
-    console.log(`Server started at http://localhost:${PORT}`)
-})
+// Import routes
+const tripRoutes = require('./routes/trip.routes');
+
+// Mount routes
+app.use('/trip', tripRoutes); // Routes available at http://localhost:<PORT>/trip
+
+// Example route
+app.get('/hello', (req, res) => {
+    res.send('Hello World!');
+});
+
+// Start server
+app.listen(PORT, () => {
+    console.log(`Server started at http://localhost:${PORT}`);
+});
