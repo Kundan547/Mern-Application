@@ -1,43 +1,93 @@
-trigger:
-- main
+---
+- name: Deploy MERN Application with Nginx
+  hosts: all
+  become: yes
 
-pool:
-  vmImage: ubuntu-latest
+  vars:
+    repo_url: "git@github.com:Kundan547/Mern-Application.git"
+    web_server_ip: "PublicIP"
+    db_server_ip: "private_ip"
+    project_dir: "/home/ubuntu/Mern-Application"
 
-steps:
-- task: NodeTool@0
-  inputs:
-    versionSpec: '18.x' # Use a recent Node.js version
-  displayName: 'Install Node.js'
+  tasks:
+    - name: Update system packages
+      apt:
+        update_cache: yes
+        upgrade: dist
 
-- script: |
-    cd backend
-    npm install
-    npm run build
-  displayName: 'npm install and build'
+    - name: Install required packages
+      apt:
+        name:
+          - nginx
+          - nodejs
+          - npm
+          - git
+        state: present
 
-- task: UsePythonVersion@0
-  inputs:
-    versionSpec: '3.x'
-    addToPath: true
-  displayName: 'Install Python (for AWS CLI)'
+    - name: Clone MERN application repository
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ project_dir }}"
+        version: main
+        force: yes
 
-- script: |
-    python3 -m pip install --upgrade pip
-    pip install awscli
-  displayName: 'Install AWS CLI'
+    - name: Install frontend dependencies
+      command: npm install
+      args:
+        chdir: "{{ project_dir }}/frontend"
 
-- task: CopyFilesOverSSH@0
-  inputs:
-    sshEndpoint: 'EC2-Instance-Connection' # Set up your service connection
-    sourceFolder: 'backend' # Path to your backend directory
-    targetFolder: '/home/ec2-user/backend' # Target path on the EC2 instance
-  displayName: 'Copy files to EC2 instance'
+    - name: Build the frontend
+      command: npm run build
+      args:
+        chdir: "{{ project_dir }}/frontend"
 
-- script: |
-    ssh -o StrictHostKeyChecking=no ec2-user@$(EC2_PUBLIC_IP) <<EOF
-    cd /home/ec2-user/backend
-    npm install
-    pm2 restart index.js || pm2 start index.js
-    EOF
-  displayName: 'Restart Application on EC2'
+    - name: Install backend dependencies
+      command: npm install
+      args:
+        chdir: "{{ project_dir }}/backend"
+
+    - name: Create Nginx configuration for MERN app
+      copy:
+        dest: /etc/nginx/sites-available/mern_app
+        content: |
+          server {
+              listen 80;
+              server_name {{ web_server_ip }};
+
+              root {{ project_dir }}/frontend/build;
+              index index.html;
+
+              location / {
+                  try_files $uri /index.html;
+              }
+
+              location /api/ {
+                  proxy_pass http://localhost:3001;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+              }
+
+              error_page 404 /index.html;
+          }
+      notify: Restart Nginx
+
+    - name: Enable Nginx site
+      file:
+        src: /etc/nginx/sites-available/mern_app
+        dest: /etc/nginx/sites-enabled/mern_app
+        state: link
+
+    - name: Remove default Nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Restart Nginx
+
+  handlers:
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted
