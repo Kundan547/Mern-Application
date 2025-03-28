@@ -18,7 +18,7 @@ app.use(cors()); // Enable CORS
 const tripRoutes = require('./routes/trip.routes');
 
 // Mount routes
-app.use('/trip', tripRoutes); // Routes available at http://localhost:<PORT>/trip
+app.use('/api/trip', tripRoutes); // Routes available at http://localhost:<PORT>/trip
 
 // Example route
 app.get('/hello', (req, res) => {
