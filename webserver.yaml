@@ -1,0 +1,51 @@
+---
+- name: Setup MERN Web Server
+  hosts: webserver
+  become: yes
+  tasks:
+    - name: Update the apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install prerequisites for Node.js
+      apt:
+        name:
+          - curl
+          - gnupg
+        state: present
+
+    - name: Add Node.js 18 repository
+      shell: curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+      args:
+        executable: /bin/bash
+
+    - name: Install Node.js and npm
+      apt:
+        name:
+          - nodejs
+        state: present
+
+    - name: Verify Node.js installation
+      command: node --version
+      register: node_version
+      changed_when: false
+
+    - debug:
+        msg: "Node.js version installed: {{ node_version.stdout }}"
+
+    - name: Clone the MERN application repository
+      git:
+        repo: https://github.com/Kundan547/Mern-Application.git
+        dest: /home/ubuntu/TravelMemory
+        version: main
+
+    - name: Install backend dependencies
+      command: npm install
+      args:
+        chdir: /home/ubuntu/TravelMemory/backend
+
+    - name: Install frontend dependencies
+      command: npm install
+      args:
+        chdir: /home/ubuntu/TravelMemory/frontend
+
