@@ -1,0 +1,10 @@
+all:
+  hosts:
+    webserver:
+      ansible_host: PublicIP
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: /home/ubuntu/Data.pem
+    dbserver:
+      ansible_host: PrivateIP
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: /home/ubuntu/Data.pem
