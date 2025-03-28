@@ -1,0 +1,61 @@
+- name: Setup Database Server
+  hosts: dbserver
+  become: true
+  tasks:
+    - name: Update the apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install gnupg and curl
+      apt:
+        name: 
+          - gnupg
+          - curl
+        state: present
+
+    - name: Import MongoDB public key
+      command: >
+        curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc |
+        gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
+      args:
+        creates: /usr/share/keyrings/mongodb-server-8.0.gpg
+
+    - name: Add MongoDB repository
+      copy:
+        content: |
+          deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse
+        dest: /etc/apt/sources.list.d/mongodb-org-8.0.list
+
+    - name: Update the apt cache again after adding MongoDB repo
+      apt:
+        update_cache: yes
+
+    - name: Install MongoDB
+      apt:
+        name: mongodb-org
+        state: present
+
+    - name: Install MongoDB shell
+      apt:
+        name: mongodb-mongosh
+        state: present
+
+    - name: Start MongoDB service
+      service:
+        name: mongod
+        state: started
+        enabled: true
+
+    - name: Create MongoDB user and database using mongosh
+      shell: |
+        mongosh <<EOF
+        use TravelMemoryDB
+        db.createUser({
+          user: "admin",
+          pwd: "securepassword",
+          roles: [{ role: "readWrite", db: "TravelMemoryDB" }]
+        });
+        EOF
+      args:
+        executable: /bin/bash
+
