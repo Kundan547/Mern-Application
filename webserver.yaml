@@ -2,10 +2,40 @@
 - name: Setup MERN Web Server
   hosts: webserver
   become: yes
+  vars:
+    public_ip: "Public_IP" # Replace with your actual public IP
+    s3_url: "s3 ://your-bucket-name/Data.pem" # Replace with your actual S3 bucket URL
+    pem_file_path: "path/to/key_pair.pem" # Path to save the downloaded PEM file
+
   tasks:
     - name: Update the apt cache
       apt:
         update_cache: yes
+
+    - name: Install prerequisites for AWS CLI
+      apt:
+        name:
+          - curl
+          - gnupg
+          - unzip
+        state: present
+
+    - name: Install AWS CLI from official repository
+      shell: |
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        unzip awscliv2.zip
+        sudo ./aws/install
+      args:
+        executable: /bin/bash
+        creates: /usr/local/bin/aws  # Prevents reinstallation
+
+    - name: Verify AWS CLI installation
+      command: aws --version
+      register: aws_version
+      changed_when: false
+
+    - debug:
+        msg: "AWS CLI version installed: {{ aws_version.stdout }}"
 
     - name: Install prerequisites for Node.js
       apt:
@@ -33,19 +63,158 @@
     - debug:
         msg: "Node.js version installed: {{ node_version.stdout }}"
 
+    - name: Ensure target directory is clean before cloning
+      file:
+        path: path/to/your/application # Replace with the actual path to your application directory
+        state: absent
+
     - name: Clone the MERN application repository
       git:
-        repo: https://github.com/Kundan547/Mern-Application.git
-        dest: /home/ubuntu/TravelMemory
+        repo: GitHub_Repo_URL # Replace with your actual GitHub repository URL
+        dest: path/to/your/application # Replace with the actual path to your application directory
         version: main
+
+    - name: Set ownership of application files
+      file:
+        path: path/to/your/application # Replace with the actual path to your application directory
+        owner: ubuntu
+        group: ubuntu
+        recurse: yes
+
+    - name: Create .env file for backend
+      copy:
+        dest: path/to/backend/.env # Replace with the actual path to your backend directory
+        content: |
+          PORT=3001
+          MONGO_URI=mongodb+srv://User_name:{{ mongo_password }}@merncluster.pz1lu.mongodb.net/mern?retryWrites=true&w=majority
+
+    - name: Create .env file for frontend
+      copy:
+        dest: path/to/frontend/.env # Replace with the actual path to your frontend directory
+        content: |
+          REACT_APP_BACKEND_URL=http://{{ public_ip }}/api
 
     - name: Install backend dependencies
       command: npm install
       args:
-        chdir: /home/ubuntu/TravelMemory/backend
+        chdir: path/to/backend # Replace with the actual path to your backend directory
 
     - name: Install frontend dependencies
       command: npm install
       args:
-        chdir: /home/ubuntu/TravelMemory/frontend
+        chdir: path/to/frontend # Replace with the actual path to your frontend directory
 
+    - name: Build frontend
+      command: npm run build
+      args:
+        chdir: path/to/frontend # Replace with the actual path to your frontend directory
+
+    - name: Install PM2 globally
+      npm:
+        name: pm2
+        global: yes
+
+    - name: Start backend using PM2
+      command: pm2 start index.js --name backend -f
+      args:
+        chdir: path/to/backend # Replace with the actual path to your backend directory
+
+    - name: Save PM2 process list
+      command: pm2 save
+
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+
+    - name: Configure Nginx for MERN Application
+      copy:
+        dest: /etc/nginx/sites-available/mern_app
+        content: |
+          server {
+              listen 80;
+              server_name {{ public_ip }};
+
+              root path/to/frontend/build; # Replace with the actual path to your frontend build directory
+              index index.html;
+
+              location / {
+                  try_files $uri /index.html;
+              }
+
+              location /api/ {
+                  proxy_pass http://localhost:3001;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+              }
+
+              error_page 404 /index.html;
+          }
+
+    - name: Enable the Nginx configuration
+      file:
+        src: /etc/nginx/sites-available/mern_app
+        dest: /etc/nginx/sites-enabled/mern_app
+        state: link
+
+    - name: Remove default Nginx configuration
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Test Nginx configuration
+      command: nginx -t
+      register: nginx_test
+
+    - name: Display Nginx configuration test output
+      debug:
+        var: nginx_test.stdout
+
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted
+
+    - name: Download PEM file from S3 bucket using IAM role
+      shell: aws s3 cp {{ s3_url }} {{ pem_file_path }}
+      args:
+        executable: /bin/bash
+
+    - name: Set permissions for PEM file
+      file:
+        path: "{{ pem_file_path }}"
+        owner: ubuntu
+        group: ubuntu
+        mode: '0600'
+
+    - name: Verify PEM file existence
+      stat:
+        path: "{{ pem_file_path }}"
+      register: pem_file_check
+
+    - name: Debug PEM file existence
+      debug:
+        msg: "PEM file downloaded: {{ pem_file_check.stat.exists }}"
+
+    - name: Set ownership for frontend build directory
+      file:
+        path: path/to/frontend/build # Replace with the actual path to your frontend build directory
+        owner: www-data
+        group: www-data
+        recurse: yes
+
+    - name: Set permissions for frontend build directory
+      file:
+        path: path/to/frontend/build # Replace with the actual path to your frontend build directory
+        mode: '0755'
+        recurse: yes
+
+    - name: Set execute permission for parent directories
+      shell: |
+        chmod +x /path/to/parent_directory
+        chmod +x /path/to/parent_directory
+      args:
+        executable: /bin/bash
