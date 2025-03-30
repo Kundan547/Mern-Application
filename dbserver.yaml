@@ -1,6 +1,10 @@
 - name: Setup Database Server
   hosts: dbserver
   become: true
+  vars_prompt:
+    - name: "mongo_password"
+      prompt: "Enter the MongoDB password for user 'kundanvyas197'"
+      private: yes
   tasks:
     - name: Update the apt cache
       apt:
@@ -14,10 +18,10 @@
         state: present
 
     - name: Import MongoDB public key
-      command: >
-        curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc |
-        gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
+      shell: |
+        curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
       args:
+        executable: /bin/bash
         creates: /usr/share/keyrings/mongodb-server-8.0.gpg
 
     - name: Add MongoDB repository
@@ -46,16 +50,14 @@
         state: started
         enabled: true
 
-    - name: Create MongoDB user and database using mongosh
+    - name: Connect to MongoDB Atlas and verify connection
       shell: |
-        mongosh <<EOF
-        use TravelMemoryDB
-        db.createUser({
-          user: "admin",
-          pwd: "securepassword",
-          roles: [{ role: "readWrite", db: "TravelMemoryDB" }]
-        });
-        EOF
+        echo "{{ mongo_password }}" | mongosh "mongodb+srv://merncluster.pz1lu.mongodb.net/" --apiVersion 1 --username kundanvyas197 --password
       args:
         executable: /bin/bash
+      register: mongo_connection
+      changed_when: false
 
+    - name: Display MongoDB connection output
+      debug:
+        var: mongo_connection.stdout
