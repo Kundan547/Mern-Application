@@ -8,4 +8,4 @@ scrape_configs:
 
   - job_name: "mongodb"
     static_configs:
-      - targets: ["hostIP:9216"]  # This is where MongoDB Exporter is running
+      - targets: ["HostIP:9216"]  # This is where MongoDB Exporter is running
