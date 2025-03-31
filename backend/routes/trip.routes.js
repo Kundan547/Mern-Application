@@ -1,10 +1,23 @@
-const express = require('express')
-const routes = express.Router()
+const express = require('express');
+const routes = express.Router();
+const tripDetails = require('../controllers/trip.controller');
+const client = require('prom-client'); // Prometheus metrics
 
-const tripDetails = require('../controllers/trip.controller')
+// Define a counter metric for API requests
+const tripRequestsCounter = new client.Counter({
+    name: 'trip_requests_total',
+    help: 'Total number of trip API requests',
+    labelNames: ['method', 'route']
+});
 
-routes.post('/', tripDetails.tripAdditionController)
-routes.get('/', tripDetails.getTripDetailsController)
-routes.get('/:id', tripDetails.getTripDetailsByIdController)
+// Middleware to track API requests
+const trackRequest = (req, res, next) => {
+    tripRequestsCounter.inc({ method: req.method, route: req.originalUrl });
+    next();
+};
 
-module.exports = routes
+routes.post('/', trackRequest, tripDetails.tripAdditionController);
+routes.get('/', trackRequest, tripDetails.getTripDetailsController);
+routes.get('/:id', trackRequest, tripDetails.getTripDetailsByIdController);
+
+module.exports = routes;

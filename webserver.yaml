@@ -3,9 +3,9 @@
   hosts: webserver
   become: yes
   vars:
-    public_ip: "Public_IP" # Replace with your actual public IP
-    s3_url: "s3 ://your-bucket-name/Data.pem" # Replace with your actual S3 bucket URL
-    pem_file_path: "path/to/key_pair.pem" # Path to save the downloaded PEM file
+    public_ip: "18.226.177.163" # Replace with your actual public IP
+    s3_url: "s3://datapemfile/Data.pem" # Replace with your actual S3 bucket URL
+    pem_file_path: "/home/ubuntu/Data.pem" # Path to save the downloaded PEM file
 
   tasks:
     - name: Update the apt cache
@@ -65,49 +65,49 @@
 
     - name: Ensure target directory is clean before cloning
       file:
-        path: path/to/your/application # Replace with the actual path to your application directory
+        path: /home/ubuntu/TravelMemory
         state: absent
 
     - name: Clone the MERN application repository
       git:
-        repo: GitHub_Repo_URL # Replace with your actual GitHub repository URL
-        dest: path/to/your/application # Replace with the actual path to your application directory
+        repo: https://github.com/Kundan547/Mern-Application.git
+        dest: /home/ubuntu/TravelMemory
         version: main
 
     - name: Set ownership of application files
       file:
-        path: path/to/your/application # Replace with the actual path to your application directory
+        path: /home/ubuntu/TravelMemory
         owner: ubuntu
         group: ubuntu
         recurse: yes
 
     - name: Create .env file for backend
       copy:
-        dest: path/to/backend/.env # Replace with the actual path to your backend directory
+        dest: /home/ubuntu/TravelMemory/backend/.env
         content: |
           PORT=3001
-          MONGO_URI=mongodb+srv://User_name:{{ mongo_password }}@merncluster.pz1lu.mongodb.net/mern?retryWrites=true&w=majority
+          MONGO_URI=mongodb+srv://kundanvyas197:yFlHPYinWgR8NIRH@merncluster.pz1lu.mongodb.net/travelmemory?retryWrites=true&w=majority
 
     - name: Create .env file for frontend
       copy:
-        dest: path/to/frontend/.env # Replace with the actual path to your frontend directory
+        dest: /home/ubuntu/TravelMemory/frontend/.env
         content: |
           REACT_APP_BACKEND_URL=http://{{ public_ip }}/api
 
     - name: Install backend dependencies
       command: npm install
       args:
-        chdir: path/to/backend # Replace with the actual path to your backend directory
+        chdir: /home/ubuntu/TravelMemory/backend
 
     - name: Install frontend dependencies
       command: npm install
       args:
-        chdir: path/to/frontend # Replace with the actual path to your frontend directory
+        chdir: /home/ubuntu/TravelMemory/frontend
 
     - name: Build frontend
       command: npm run build
       args:
-        chdir: path/to/frontend # Replace with the actual path to your frontend directory
+        chdir: /home/ubuntu/TravelMemory/frontend
 
     - name: Install PM2 globally
       npm:
@@ -117,7 +117,7 @@
     - name: Start backend using PM2
       command: pm2 start index.js --name backend -f
       args:
-        chdir: path/to/backend # Replace with the actual path to your backend directory
+        chdir: /home/ubuntu/TravelMemory/backend
 
     - name: Save PM2 process list
       command: pm2 save
@@ -135,7 +135,7 @@
               listen 80;
               server_name {{ public_ip }};
 
-              root path/to/frontend/build; # Replace with the actual path to your frontend build directory
+              root /home/ubuntu/TravelMemory/frontend/build;
               index index.html;
 
               location / {
@@ -201,20 +201,20 @@
 
     - name: Set ownership for frontend build directory
       file:
-        path: path/to/frontend/build # Replace with the actual path to your frontend build directory
+        path: /home/ubuntu/TravelMemory/frontend/build
         owner: www-data
         group: www-data
         recurse: yes
 
     - name: Set permissions for frontend build directory
       file:
-        path: path/to/frontend/build # Replace with the actual path to your frontend build directory
+        path: /home/ubuntu/TravelMemory/frontend/build
         mode: '0755'
         recurse: yes
 
     - name: Set execute permission for parent directories
       shell: |
-        chmod +x /path/to/parent_directory
-        chmod +x /path/to/parent_directory
+        chmod +x /home/ubuntu
+        chmod +x /home/ubuntu/TravelMemory
       args:
         executable: /bin/bash
