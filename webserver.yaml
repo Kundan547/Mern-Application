@@ -1,17 +1,26 @@
 ---
-- name: Setup MERN Web Server
+- name: Setup MERN Web Server with Prometheus Monitoring and Grafana
   hosts: webserver
   become: yes
   vars:
-    public_ip: "Public_IP" # Replace with your actual public IP
-    s3_url: "s3 ://your-bucket-name/Data.pem" # Replace with your actual S3 bucket URL
-    pem_file_path: "path/to/key_pair.pem" # Path to save the downloaded PEM file
+    public_ip: "PublicIp"  # Replace with your actual public IP
+    s3_url: "s3://datapemfile/Data.pem"  # Replace with your actual S3 bucket URL
+    pem_file_path: "/home/ubuntu/Data.pem"  # Path to save the downloaded PEM file
+    db_private_ip: "PrivateIP"  # Replace with the actual private IP of your database server
+    grafana_port: "8001"  # Changed from 8000 to 8001 to avoid conflict
 
   tasks:
+    # Update system
     - name: Update the apt cache
       apt:
         update_cache: yes
+    # Ensure pip3 is installed
+    - name: Install pip3
+      apt:
+        name: python3-pip
+        state: present
 
+    # Install prerequisites for AWS CLI
     - name: Install prerequisites for AWS CLI
       apt:
         name:
@@ -20,6 +29,7 @@
           - unzip
         state: present
 
+    # Install AWS CLI from official repository
     - name: Install AWS CLI from official repository
       shell: |
         curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
@@ -27,106 +37,79 @@
         sudo ./aws/install
       args:
         executable: /bin/bash
-        creates: /usr/local/bin/aws  # Prevents reinstallation
+        creates: /usr/local/bin/aws
 
-    - name: Verify AWS CLI installation
-      command: aws --version
-      register: aws_version
-      changed_when: false
-
-    - debug:
-        msg: "AWS CLI version installed: {{ aws_version.stdout }}"
-
-    - name: Install prerequisites for Node.js
-      apt:
-        name:
-          - curl
-          - gnupg
-        state: present
-
-    - name: Add Node.js 18 repository
-      shell: curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+    # Install Node.js and npm
+    - name: Install Node.js and npm
+      shell: |
+        curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+        apt-get install -y nodejs
       args:
         executable: /bin/bash
 
-    - name: Install Node.js and npm
-      apt:
-        name:
-          - nodejs
-        state: present
-
-    - name: Verify Node.js installation
-      command: node --version
-      register: node_version
-      changed_when: false
-
-    - debug:
-        msg: "Node.js version installed: {{ node_version.stdout }}"
-
-    - name: Ensure target directory is clean before cloning
-      file:
-        path: path/to/your/application # Replace with the actual path to your application directory
-        state: absent
-
+    # Clone the MERN application repository
     - name: Clone the MERN application repository
       git:
-        repo: GitHub_Repo_URL # Replace with your actual GitHub repository URL
-        dest: path/to/your/application # Replace with the actual path to your application directory
+        repo: https://github.com/Kundan547/Mern-Application.git
+        dest: /home/ubuntu/TravelMemory
         version: main
 
-    - name: Set ownership of application files
-      file:
-        path: path/to/your/application # Replace with the actual path to your application directory
-        owner: ubuntu
-        group: ubuntu
-        recurse: yes
-
+    # Create .env file for backend
     - name: Create .env file for backend
       copy:
-        dest: path/to/backend/.env # Replace with the actual path to your backend directory
+        dest: /home/ubuntu/TravelMemory/backend/.env
         content: |
           PORT=3001
-          MONGO_URI=mongodb+srv://User_name:{{ mongo_password }}@merncluster.pz1lu.mongodb.net/mern?retryWrites=true&w=majority
+          MONGO_URI=MOngoURL
 
+    # Create .env file for frontend
     - name: Create .env file for frontend
       copy:
-        dest: path/to/frontend/.env # Replace with the actual path to your frontend directory
+        dest: /home/ubuntu/TravelMemory/frontend/.env
         content: |
           REACT_APP_BACKEND_URL=http://{{ public_ip }}/api
 
+    # Install backend dependencies
     - name: Install backend dependencies
       command: npm install
       args:
-        chdir: path/to/backend # Replace with the actual path to your backend directory
+        chdir: /home/ubuntu/TravelMemory/backend
 
+    # Install frontend dependencies
     - name: Install frontend dependencies
       command: npm install
       args:
-        chdir: path/to/frontend # Replace with the actual path to your frontend directory
+        chdir: /home/ubuntu/TravelMemory/frontend
 
+    # Build frontend
     - name: Build frontend
       command: npm run build
       args:
-        chdir: path/to/frontend # Replace with the actual path to your frontend directory
+        chdir: /home/ubuntu/TravelMemory/frontend
 
+    # Install PM2 globally
     - name: Install PM2 globally
       npm:
         name: pm2
         global: yes
 
+    # Start backend using PM2
     - name: Start backend using PM2
       command: pm2 start index.js --name backend -f
       args:
-        chdir: path/to/backend # Replace with the actual path to your backend directory
+        chdir: /home/ubuntu/TravelMemory/backend
 
+    # Save PM2 process list
     - name: Save PM2 process list
       command: pm2 save
 
+    # Install Nginx
     - name: Install Nginx
       apt:
         name: nginx
         state: present
 
+    # Configure Nginx for MERN Application
     - name: Configure Nginx for MERN Application
       copy:
         dest: /etc/nginx/sites-available/mern_app
@@ -135,7 +118,7 @@
               listen 80;
               server_name {{ public_ip }};
 
-              root path/to/frontend/build; # Replace with the actual path to your frontend build directory
+              root /home/ubuntu/TravelMemory/frontend/build;
               index index.html;
 
               location / {
@@ -151,38 +134,55 @@
                   proxy_cache_bypass $http_upgrade;
               }
 
+              # Add Grafana reverse proxy
+              location /grafana/ {
+                  proxy_pass http://localhost:{{ grafana_port }}/;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+              }
+
               error_page 404 /index.html;
           }
 
+    # Enable the Nginx configuration
     - name: Enable the Nginx configuration
       file:
         src: /etc/nginx/sites-available/mern_app
         dest: /etc/nginx/sites-enabled/mern_app
         state: link
 
+    # Remove default Nginx configuration
     - name: Remove default Nginx configuration
       file:
         path: /etc/nginx/sites-enabled/default
         state: absent
 
+    # Test Nginx configuration
     - name: Test Nginx configuration
       command: nginx -t
       register: nginx_test
 
+    # Display Nginx configuration test output
     - name: Display Nginx configuration test output
       debug:
         var: nginx_test.stdout
 
+    # Restart Nginx
     - name: Restart Nginx
       service:
         name: nginx
         state: restarted
 
+    # Download PEM file from S3 bucket using IAM role
     - name: Download PEM file from S3 bucket using IAM role
       shell: aws s3 cp {{ s3_url }} {{ pem_file_path }}
       args:
         executable: /bin/bash
 
+    # Set permissions for PEM file
     - name: Set permissions for PEM file
       file:
         path: "{{ pem_file_path }}"
@@ -190,31 +190,129 @@
         group: ubuntu
         mode: '0600'
 
+    # Verify PEM file existence
     - name: Verify PEM file existence
       stat:
         path: "{{ pem_file_path }}"
       register: pem_file_check
 
+    # Debug PEM file existence
     - name: Debug PEM file existence
       debug:
         msg: "PEM file downloaded: {{ pem_file_check.stat.exists }}"
 
+    # Set ownership for frontend build directory
     - name: Set ownership for frontend build directory
       file:
-        path: path/to/frontend/build # Replace with the actual path to your frontend build directory
+        path: /home/ubuntu/TravelMemory/frontend/build
         owner: www-data
         group: www-data
         recurse: yes
 
+    # Set permissions for frontend build directory
     - name: Set permissions for frontend build directory
       file:
-        path: path/to/frontend/build # Replace with the actual path to your frontend build directory
+        path: /home/ubuntu/TravelMemory/frontend/build
         mode: '0755'
         recurse: yes
 
+    # Set execute permission for parent directories
     - name: Set execute permission for parent directories
       shell: |
-        chmod +x /path/to/parent_directory
-        chmod +x /path/to/parent_directory
+        chmod +x /home/ubuntu
+        chmod +x /home/ubuntu/TravelMemory
       args:
         executable: /bin/bash
+
+    # Prometheus configuration
+    - name: Install Prometheus and Node Exporter
+      apt:
+        name:
+          - prometheus
+          - prometheus-node-exporter
+        state: present
+
+    - name: Start and enable Prometheus services
+      systemd:
+        name: prometheus
+        state: restarted
+        enabled: yes
+
+    - name: Start and enable Node Exporter
+      systemd:
+        name: prometheus-node-exporter
+        state: started
+        enabled: yes
+
+    - name: Configure Prometheus to monitor both web and database servers
+      copy:
+        dest: /etc/prometheus/prometheus.yml
+        content: |
+          global:
+            scrape_interval: 15s
+
+          scrape_configs:
+            - job_name: 'webserver'
+              static_configs:
+                - targets: ['{{ public_ip }}:9100']
+
+            - job_name: 'dbserver'
+              static_configs:
+                - targets: ['{{ db_private_ip }}:9100']
+
+    - name: Restart Prometheus to apply changes
+      systemd:
+        name: prometheus
+        state: restarted
+
+    # Docker and Grafana Setup (Moved to the end)
+
+    # Install Docker
+    - name: Install Docker
+      apt:
+        name:
+          - docker.io
+        state: present
+
+    # Install Docker Python SDK using apt instead of pip (for externally managed environments)
+    - name: Install Python Docker SDK using apt
+      apt:
+        name: python3-docker
+        state: present
+
+    # Start and enable Docker service
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    # Check if Grafana container is already running
+    - name: Check if Grafana container exists
+      shell: docker ps -a --filter "name=grafana" --format {% raw %}"{{.Names}}"{% endraw %}
+      register: grafana_container_check
+      changed_when: false
+
+    # Stop and remove existing Grafana container if it exists
+    - name: Stop and remove existing Grafana container
+      docker_container:
+        name: grafana
+        state: absent
+      when: grafana_container_check.stdout == "grafana"
+
+    # Pull the Grafana Docker image
+    - name: Pull Grafana Docker image
+      command: docker pull grafana/grafana-oss
+      become: yes
+
+    # Run Grafana Docker container
+    - name: Run Grafana Docker container
+      docker_container:
+        name: grafana
+        image: grafana/grafana-oss
+        state: started
+        restart_policy: always
+        exposed_ports:
+          - "3000"
+        published_ports:
+          - "{{ grafana_port }}:3000"
