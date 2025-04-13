@@ -52,7 +52,7 @@
 
     - name: Connect to MongoDB Atlas and verify connection
       shell: |
-        echo "{{ mongo_password }}" | mongosh "mongodb+srv://merncluster.pz1lu.mongodb.net/" --apiVersion 1 --username kundanvyas197 --password
+        echo "{{ mongo_password }}" | mongosh "mongourl
       args:
         executable: /bin/bash
       register: mongo_connection
@@ -61,3 +61,26 @@
     - name: Display MongoDB connection output
       debug:
         var: mongo_connection.stdout
+
+    # Install Prometheus Node Exporter
+    - name: Install Prometheus Node Exporter
+      apt:
+        name: prometheus-node-exporter
+        state: present
+
+    # Start Prometheus Node Exporter
+    - name: Start and enable Prometheus Node Exporter service
+      systemd:
+        name: prometheus-node-exporter
+        state: started
+        enabled: true
+
+    # Verify Node Exporter is running
+    - name: Check status of Node Exporter
+      command: systemctl status prometheus-node-exporter
+      register: node_exporter_status
+      changed_when: false
+
+    - name: Display Node Exporter status
+      debug:
+        var: node_exporter_status.stdout
