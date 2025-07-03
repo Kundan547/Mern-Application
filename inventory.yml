@@ -3,9 +3,9 @@ all:
     webserver:
       ansible_host: PublicIP
       ansible_user: ubuntu
-      ansible_ssh_private_key_file: /home/kundan/Downloads/Data.pem # Path to your private key
+      ansible_ssh_private_key_file: /path/to/your/private/key.pem # Path to your private key
     dbserver:
       ansible_host: PrivateIP
       ansible_user: ubuntu
-      ansible_ssh_private_key_file: /home/kundan/Downloads/Data.pem
-      ansible_ssh_common_args: '-o ProxyCommand="ssh -W %h:%p -i /home/kundan/Downloads/Data.pem ubuntu@PublicIP"'
+      ansible_ssh_private_key_file: /path/to/your/private/key.pem # Path to your private key for the database server
+      ansible_ssh_common_args: '-o ProxyCommand="ssh -W %h:%p -i /path/to/your/private/key.pem ubuntu@PublicIP"'
